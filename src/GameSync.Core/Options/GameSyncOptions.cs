@@ -10,7 +10,7 @@ public sealed class GameSyncOptions
     /// <summary>
     /// Official GitHub owner for Releases-based self-updates.
     /// </summary>
-    public const string DefaultUpdateReleasesOwner = "TCDev69";
+    public const string DefaultUpdateReleasesOwner = "TCDev10";
 
     public const string DefaultUpdateReleasesRepo = "GameSync";
 
@@ -50,12 +50,19 @@ public sealed class GameSyncOptions
     public string UpdateReleasesRepo { get; set; } = DefaultUpdateReleasesRepo;
 
     /// <summary>
-    /// v1.0.0 builds and stale MSIX debug output used <c>TCDev</c> instead of <c>TCDev69</c>.
+    /// Older builds used <c>TCDev</c> or <c>TCDev69</c> as the Releases owner.
+    /// Remap those legacy owners to <see cref="DefaultUpdateReleasesOwner"/> when the repo name
+    /// is still the official GameSync feed, so hijacked redirects cannot supply updates.
     /// </summary>
     public void NormalizeUpdateFeed()
     {
+        if (!string.Equals(UpdateReleasesRepo, DefaultUpdateReleasesRepo, StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
         if (string.Equals(UpdateReleasesOwner, "TCDev", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(UpdateReleasesRepo, DefaultUpdateReleasesRepo, StringComparison.OrdinalIgnoreCase))
+            || string.Equals(UpdateReleasesOwner, "TCDev69", StringComparison.OrdinalIgnoreCase))
         {
             UpdateReleasesOwner = DefaultUpdateReleasesOwner;
         }

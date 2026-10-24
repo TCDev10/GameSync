@@ -40,14 +40,21 @@ public sealed partial class ConflictDialogViewModel : ObservableObject
 
     public event EventHandler? CloseRequested;
 
-    public void LoadFromConflict(Conflict conflict, string? gameTitle = null)
+    public void LoadFromConflict(Conflict conflict, string? gameTitle = null, int totalConflicts = 1)
     {
         GameTitle = gameTitle ?? conflict.GameId ?? "Game";
         SaveLocation = conflict.LocalPath ?? conflict.RemotePath ?? conflict.Path;
+        var multi = totalConflicts > 1
+            ? $"\nThis choice will be applied to all {totalConflicts} conflicted files."
+            : string.Empty;
         TechnicalDetails =
-            $"Path: {conflict.Path}\nType: {conflict.Type}\nBinary: {conflict.IsBinary}\n{conflict.Message}";
-        LocalVersion = "Keep the version on this PC";
-        RemoteVersion = "Keep the version from GitHub";
+            $"Path: {conflict.Path}\nType: {conflict.Type}\nBinary: {conflict.IsBinary}\n{conflict.Message}{multi}";
+        LocalVersion = totalConflicts > 1
+            ? "Keep the version on this PC (all conflicted files)"
+            : "Keep the version on this PC";
+        RemoteVersion = totalConflicts > 1
+            ? "Keep the version from GitHub (all conflicted files)"
+            : "Keep the version from GitHub";
     }
 
     [RelayCommand]

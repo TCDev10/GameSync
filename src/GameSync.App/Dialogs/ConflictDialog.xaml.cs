@@ -16,8 +16,8 @@ public sealed partial class ConflictDialog : ContentDialog
         ViewModel.CloseRequested += (_, _) => Hide();
     }
 
-    public void Load(Conflict conflict, string? gameTitle = null) =>
-        ViewModel.LoadFromConflict(conflict, gameTitle);
+    public void Load(Conflict conflict, string? gameTitle = null, int totalConflicts = 1) =>
+        ViewModel.LoadFromConflict(conflict, gameTitle, totalConflicts);
 
     public ConflictResolutionChoice Choice => ViewModel.Result;
 }

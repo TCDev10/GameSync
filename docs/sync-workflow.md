@@ -73,5 +73,7 @@ Unchanged from the sync engine (fetch/pull/restore and detect/copy/commit/push).
 
 ## Current limitations
 
-- Conflict resolution UI during pre-launch sync is still deferred (workflow stops with error).
+- Pre-launch sync soft-fails when GitHub is unreachable: the game launches with local saves and sync retries after exit.
+- Git conflict resolution applies the chosen side to **all** conflicted paths and completes the merge commit (resolving only the first file used to leave the repo stuck).
+- Save-divergence still requires an explicit Local/Remote choice before launch (never silent overwrite).
 - Shortcut targets resolve via `Environment.ProcessPath` (installed or published GameSync.exe).

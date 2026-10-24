@@ -15,8 +15,8 @@ namespace GameSync.Infrastructure.Tests.Updates;
 
 public sealed class GitHubReleaseAppUpdateServiceTests : IDisposable
 {
-    private const string AssetUrl = "https://github.com/TCDev69/GameSync/releases/download/v99.0.0/GameSync-Setup-x64.exe";
-    private const string ApiUrl = "https://api.github.com/repos/TCDev69/GameSync/releases/latest";
+    private const string AssetUrl = "https://github.com/TCDev10/GameSync/releases/download/v99.0.0/GameSync-Setup-x64.exe";
+    private const string ApiUrl = "https://api.github.com/repos/TCDev10/GameSync/releases/latest";
 
     private readonly string _root = Path.Combine(
         Path.GetTempPath(), "GameSyncUpdateTests", Guid.NewGuid().ToString("N"));
@@ -228,7 +228,7 @@ public sealed class GitHubReleaseAppUpdateServiceTests : IDisposable
         return $$"""
             {
               "tag_name": "{{tag}}",
-              "html_url": "https://github.com/TCDev69/GameSync/releases/tag/{{tag}}",
+              "html_url": "https://github.com/TCDev10/GameSync/releases/tag/{{tag}}",
               "assets": {{assets}}
             }
             """;

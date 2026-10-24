@@ -53,7 +53,7 @@ Defaults are baked into [`GameSyncOptions`](../src/GameSync.Core/Options/GameSyn
 | Setting | Default |
 |---------|---------|
 | `GitHubClientId` | `Ov23lifRWe1kBZkxMufT` |
-| `UpdateReleasesOwner` | `TCDev69` |
+| `UpdateReleasesOwner` | `TCDev10` |
 | `UpdateReleasesRepo` | `GameSync` |
 
 Optional overrides (development / special builds):
@@ -163,7 +163,7 @@ With `GAMESYNC_UPDATE_OWNER` / `GAMESYNC_UPDATE_REPO` (or baked defaults) set:
 
 1. OAuth App created, **Device Flow** enabled (Client ID already defaulted in `GameSyncOptions`).
 2. Callback URL filled with placeholder (`http://127.0.0.1/` is fine).
-3. First Release asset named `GameSync-Setup-x64.exe` on `TCDev69/GameSync`.
+3. First Release asset named `GameSync-Setup-x64.exe` on `TCDev10/GameSync`.
 4. `Version` in `Directory.Build.props` matches tag `vX.Y.Z`.
 5. Local test: install Setup → login → sync → shortcuts → About version.
 6. Uninstall: Program Files gone; `%LOCALAPPDATA%\GameSync\` still there.

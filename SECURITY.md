@@ -4,8 +4,8 @@
 
 If you discover a security issue in GameSync, please **do not** open a public GitHub issue with exploit details.
 
-1. Open a [private security advisory](https://github.com/TCDev69/GameSync/security/advisories/new) on this repository, **or**
-2. Contact the maintainer through GitHub (profile: [TCDev69](https://github.com/TCDev69)).
+1. Open a [private security advisory](https://github.com/TCDev10/GameSync/security/advisories/new) on this repository, **or**
+2. Contact the maintainer through GitHub (profile: [TCDev10](https://github.com/TCDev10)).
 
 Include steps to reproduce, affected version, and impact if known. You should receive a response within a reasonable time.
 

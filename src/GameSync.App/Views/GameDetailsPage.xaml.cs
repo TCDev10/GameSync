@@ -45,7 +45,7 @@ public sealed partial class GameDetailsPage : Page
         var conflict = result.Conflicts[0];
         var dialog = new ConflictDialog();
         dialog.XamlRoot = XamlRoot;
-        dialog.Load(conflict, ViewModel.Title);
+        dialog.Load(conflict, ViewModel.Title, result.Conflicts.Count);
         await dialog.ShowAsync();
 
         if (dialog.Choice is ConflictResolutionChoice.ViewHistory)
@@ -77,8 +77,8 @@ public sealed partial class GameDetailsPage : Page
                     return;
                 }
 
-                await resolver.ApplyAsync(repoPath, conflict, resolution);
-                applyResult = SyncResult.Success(SyncStatus.UpToDate);
+                await resolver.ApplyAllAsync(repoPath, result.Conflicts, resolution);
+                applyResult = SyncResult.Success(SyncStatus.UpToDate, "Conflicts resolved.");
             }
 
             if (!applyResult.Succeeded)

@@ -11,7 +11,7 @@ GameSync v1.0.0 is a desktop tool for technical users who manage their own priva
 ## Distribution
 
 - **Unsigned installer** — `GameSync-Setup-x64.exe` is not code-signed. Windows SmartScreen may warn on first run; choose **More info → Run anyway**.
-- **Updates** — In-app updates download the Setup.exe from GitHub Releases (`TCDev69/GameSync` by default), verify its SHA-256 and install it unattended. Requires network access, and Windows shows a UAC prompt because the installer writes to Program Files. A release without a `GameSync-Setup*.exe` asset cannot be installed automatically.
+- **Updates** — In-app updates download the Setup.exe from GitHub Releases (`TCDev10/GameSync` by default), verify its SHA-256 and install it unattended. Requires network access, and Windows shows a UAC prompt because the installer writes to Program Files. A release without a `GameSync-Setup*.exe` asset cannot be installed automatically.
 
 ## Platform
 

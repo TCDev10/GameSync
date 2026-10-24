@@ -2,7 +2,7 @@
 
 <img src="docs/assets/gamesync-logo.png" alt="GameSync logo" width="128" />
 
-[![CI](https://github.com/TCDev69/GameSync/actions/workflows/ci.yml/badge.svg)](https://github.com/TCDev69/GameSync/actions/workflows/ci.yml)
+[![CI](https://github.com/TCDev10/GameSync/actions/workflows/ci.yml/badge.svg)](https://github.com/TCDev10/GameSync/actions/workflows/ci.yml)
 
 Synchronize video game save files across your PCs using **your own private GitHub repository**. No GameSync cloud — your saves stay in a repo you control.
 
@@ -16,7 +16,7 @@ Synchronize video game save files across your PCs using **your own private GitHu
 
 ## Download
 
-1. Get **`GameSync-Setup-x64.exe`** from [GitHub Releases](https://github.com/TCDev69/GameSync/releases).
+1. Get **`GameSync-Setup-x64.exe`** from [GitHub Releases](https://github.com/TCDev10/GameSync/releases).
 2. Run the installer (admin required for Program Files).
 3. If Windows SmartScreen warns (unsigned build), choose **More info → Run anyway**.
 

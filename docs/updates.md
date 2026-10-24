@@ -1,6 +1,6 @@
 # Updates
 
-GameSync updates itself from the GitHub Releases of `TCDev69/GameSync`. The app downloads the
+GameSync updates itself from the GitHub Releases of `TCDev10/GameSync`. The app downloads the
 Inno Setup installer published with the release, verifies it, and runs it unattended.
 
 ## Flow

@@ -3,13 +3,13 @@
     "GameSync.App (Unpackaged)": {
       "commandName": "Project",
       "environmentVariables": {
-        "GAMESYNC_UPDATE_OWNER": "TCDev69"
+        "GAMESYNC_UPDATE_OWNER": "TCDev10"
       }
     },
     "GameSync.App (Package)": {
       "commandName": "MsixPackage",
       "environmentVariables": {
-        "GAMESYNC_UPDATE_OWNER": "TCDev69"
+        "GAMESYNC_UPDATE_OWNER": "TCDev10"
       }
     }
   }

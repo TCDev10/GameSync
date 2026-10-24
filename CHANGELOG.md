@@ -2,6 +2,13 @@
 
 All notable changes to GameSync are documented here. Version numbers follow [Semantic Versioning](https://semver.org/).
 
+## Unreleased
+
+### Fixed
+- In-app updates now target `TCDev10/GameSync` (legacy `TCDev` / `TCDev69` owners are remapped).
+- Pre-launch sync no longer blocks game launch when GitHub fetch/pull fails; local saves are used instead.
+- Resolving Git conflicts now applies to every conflicted path and completes the merge, ending the launch deadlock loop.
+
 ## [1.1.2] - 2026-08-20
 
 ### Fixed
@@ -61,7 +68,7 @@ All notable changes to GameSync are documented here. Version numbers follow [Sem
 
 ### Fixed
 
-- Legacy update feed owner (`TCDev`) is normalized to `TCDev69` for the official release repo
+- Legacy update feed owners (`TCDev` / `TCDev69`) are normalized to `TCDev10` for the official release repo
 - Navigation selection glitches when opening Settings from the CLI
 
 ## [1.0.2] - 2026-08-12
@@ -125,10 +132,10 @@ All notable changes to GameSync are documented here. Version numbers follow [Sem
 - Local save path policy blocks sensitive system folders
 - HTTPS-only update downloads from GitHub hosts
 
-[1.1.2]: https://github.com/TCDev69/GameSync/releases/tag/v1.1.2
-[1.1.1]: https://github.com/TCDev69/GameSync/releases/tag/v1.1.1
-[1.1.0]: https://github.com/TCDev69/GameSync/releases/tag/v1.1.0
-[1.0.3]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.3
-[1.0.2]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.2
-[1.0.1]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.1
-[1.0.0]: https://github.com/TCDev69/GameSync/releases/tag/v1.0.0
+[1.1.2]: https://github.com/TCDev10/GameSync/releases/tag/v1.1.2
+[1.1.1]: https://github.com/TCDev10/GameSync/releases/tag/v1.1.1
+[1.1.0]: https://github.com/TCDev10/GameSync/releases/tag/v1.1.0
+[1.0.3]: https://github.com/TCDev10/GameSync/releases/tag/v1.0.3
+[1.0.2]: https://github.com/TCDev10/GameSync/releases/tag/v1.0.2
+[1.0.1]: https://github.com/TCDev10/GameSync/releases/tag/v1.0.1
+[1.0.0]: https://github.com/TCDev10/GameSync/releases/tag/v1.0.0

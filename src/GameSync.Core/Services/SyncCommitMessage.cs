@@ -39,4 +39,15 @@ public static class SyncCommitMessage
     }
 
     public static string ForRepositoryInitialize() => "GameSync: Initialize repository structure";
+
+    public static string ForConflictResolution(string? machineId = null)
+    {
+        if (string.IsNullOrWhiteSpace(machineId))
+        {
+            return "GameSync: Resolve save conflicts";
+        }
+
+        return $"GameSync: Resolve save conflicts on {machineId.Trim()}";
+    }
 }
+
