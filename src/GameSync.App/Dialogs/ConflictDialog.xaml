@@ -3,41 +3,125 @@
     x:Class="GameSync.App.Dialogs.ConflictDialog"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    Title="Resolve sync conflict"
+    xmlns:vm="using:GameSync.App.ViewModels"
+    Title="{x:Bind ViewModel.Headline, Mode=OneWay}"
     PrimaryButtonText=""
     SecondaryButtonText=""
     CloseButtonText=""
     DefaultButton="None">
 
-    <ScrollViewer MaxHeight="480">
-        <StackPanel Spacing="12" Width="440">
-            <TextBlock Style="{StaticResource BodyTextBlockStyle}" TextWrapping="WrapWholeWords">
-                Local and remote saves differ. Choose which version to keep. Technical Git details are optional.
-            </TextBlock>
+    <ScrollViewer MaxHeight="560" HorizontalScrollMode="Disabled" VerticalScrollBarVisibility="Auto">
+        <StackPanel Spacing="14" Width="520">
+            <TextBlock
+                Style="{StaticResource BodyTextBlockStyle}"
+                Text="{x:Bind ViewModel.Explanation, Mode=OneWay}"
+                TextWrapping="WrapWholeWords" />
 
-            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="{x:Bind ViewModel.GameTitle, Mode=OneWay}" />
-            <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind ViewModel.SaveLocation, Mode=OneWay}" TextWrapping="Wrap" />
+            <StackPanel Spacing="2">
+                <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="{x:Bind ViewModel.GameTitle, Mode=OneWay}" />
+                <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind ViewModel.FileSummary, Mode=OneWay}" TextWrapping="Wrap" />
+                <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind ViewModel.SaveLocation, Mode=OneWay}" TextWrapping="Wrap" Opacity="0.7" />
+            </StackPanel>
 
+            <!-- Steam-style two-column choice cards -->
             <Grid ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
-                <StackPanel Spacing="4">
-                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Local" />
-                    <TextBlock Text="{x:Bind ViewModel.LocalVersion, Mode=OneWay}" TextWrapping="WrapWholeWords" />
-                    <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind ViewModel.LocalTimestamp, Mode=OneWay}" />
-                    <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind ViewModel.LocalMachine, Mode=OneWay}" />
-                </StackPanel>
-                <StackPanel Grid.Column="1" Spacing="4">
-                    <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Remote" />
-                    <TextBlock Text="{x:Bind ViewModel.RemoteVersion, Mode=OneWay}" TextWrapping="WrapWholeWords" />
-                    <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind ViewModel.RemoteTimestamp, Mode=OneWay}" />
-                    <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind ViewModel.RemoteMachine, Mode=OneWay}" />
-                </StackPanel>
+
+                <Border
+                    Padding="14"
+                    CornerRadius="8"
+                    BorderThickness="1"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <StackPanel Spacing="8">
+                        <Grid>
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="This PC" />
+                            <Border
+                                HorizontalAlignment="Right"
+                                Padding="8,2"
+                                CornerRadius="4"
+                                Background="{ThemeResource SystemFillColorSuccessBrush}"
+                                Visibility="{x:Bind ViewModel.LocalIsNewer, Mode=OneWay}">
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.LocalBadge, Mode=OneWay}"
+                                    Foreground="White"
+                                    FontSize="11"
+                                    FontWeight="SemiBold" />
+                            </Border>
+                        </Grid>
+                        <TextBlock Text="{x:Bind ViewModel.LocalVersion, Mode=OneWay}" TextWrapping="WrapWholeWords" Opacity="0.85" />
+                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="{x:Bind ViewModel.LocalTimestamp, Mode=OneWay}" TextWrapping="Wrap" />
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind ViewModel.LocalSizeText, Mode=OneWay}" />
+                        <Button
+                            Margin="0,4,0,0"
+                            HorizontalAlignment="Stretch"
+                            Style="{StaticResource AccentButtonStyle}"
+                            Content="Keep local saves"
+                            Command="{x:Bind ViewModel.UseLocalCommand}" />
+                    </StackPanel>
+                </Border>
+
+                <Border
+                    Grid.Column="1"
+                    Padding="14"
+                    CornerRadius="8"
+                    BorderThickness="1"
+                    BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                    Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
+                    <StackPanel Spacing="8">
+                        <Grid>
+                            <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="Cloud" />
+                            <Border
+                                HorizontalAlignment="Right"
+                                Padding="8,2"
+                                CornerRadius="4"
+                                Background="{ThemeResource SystemFillColorSuccessBrush}"
+                                Visibility="{x:Bind ViewModel.RemoteIsNewer, Mode=OneWay}">
+                                <TextBlock
+                                    Text="{x:Bind ViewModel.RemoteBadge, Mode=OneWay}"
+                                    Foreground="White"
+                                    FontSize="11"
+                                    FontWeight="SemiBold" />
+                            </Border>
+                        </Grid>
+                        <TextBlock Text="{x:Bind ViewModel.RemoteVersion, Mode=OneWay}" TextWrapping="WrapWholeWords" Opacity="0.85" />
+                        <TextBlock Style="{StaticResource BodyStrongTextBlockStyle}" Text="{x:Bind ViewModel.RemoteTimestamp, Mode=OneWay}" TextWrapping="Wrap" />
+                        <TextBlock Style="{StaticResource CaptionTextBlockStyle}" Text="{x:Bind ViewModel.RemoteSizeText, Mode=OneWay}" />
+                        <Button
+                            Margin="0,4,0,0"
+                            HorizontalAlignment="Stretch"
+                            Content="Keep cloud saves"
+                            Command="{x:Bind ViewModel.UseRemoteCommand}" />
+                    </StackPanel>
+                </Border>
             </Grid>
 
-            <Expander Header="Details" IsExpanded="{x:Bind ViewModel.DetailsExpanded, Mode=TwoWay}" HorizontalAlignment="Stretch">
+            <ListView
+                ItemsSource="{x:Bind ViewModel.Files, Mode=OneWay}"
+                SelectionMode="None"
+                IsItemClickEnabled="False"
+                MaxHeight="140"
+                Visibility="{x:Bind ViewModel.HasMultipleFiles, Mode=OneWay}">
+                <ListView.ItemTemplate>
+                    <DataTemplate x:DataType="vm:ConflictFileRow">
+                        <Grid ColumnSpacing="8" Padding="0,2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="1.2*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{x:Bind Name}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="1" Text="{x:Bind LocalInfo}" Style="{StaticResource CaptionTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                            <TextBlock Grid.Column="2" Text="{x:Bind RemoteInfo}" Style="{StaticResource CaptionTextBlockStyle}" TextTrimming="CharacterEllipsis" />
+                        </Grid>
+                    </DataTemplate>
+                </ListView.ItemTemplate>
+            </ListView>
+
+            <Expander Header="Technical details" IsExpanded="{x:Bind ViewModel.DetailsExpanded, Mode=TwoWay}" HorizontalAlignment="Stretch">
                 <TextBlock
                     Text="{x:Bind ViewModel.TechnicalDetails, Mode=OneWay}"
                     FontFamily="Consolas"
@@ -46,9 +130,7 @@
                     IsTextSelectionEnabled="True" />
             </Expander>
 
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <Button Style="{StaticResource AccentButtonStyle}" Content="Use local" Command="{x:Bind ViewModel.UseLocalCommand}" />
-                <Button Content="Use remote" Command="{x:Bind ViewModel.UseRemoteCommand}" />
+            <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right">
                 <Button Content="View history" Command="{x:Bind ViewModel.ViewHistoryCommand}" />
                 <Button Content="Cancel" Command="{x:Bind ViewModel.CancelCommand}" />
             </StackPanel>

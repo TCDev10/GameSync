@@ -19,5 +19,8 @@ public sealed partial class ConflictDialog : ContentDialog
     public void Load(Conflict conflict, string? gameTitle = null, int totalConflicts = 1) =>
         ViewModel.LoadFromConflict(conflict, gameTitle, totalConflicts);
 
+    public void Load(IReadOnlyList<Conflict> conflicts, string? gameTitle = null) =>
+        ViewModel.LoadFromConflicts(conflicts, gameTitle);
+
     public ConflictResolutionChoice Choice => ViewModel.Result;
 }

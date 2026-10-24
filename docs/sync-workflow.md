@@ -76,4 +76,5 @@ Unchanged from the sync engine (fetch/pull/restore and detect/copy/commit/push).
 - Pre-launch sync soft-fails when GitHub is unreachable: the game launches with local saves and sync retries after exit.
 - Git conflict resolution applies the chosen side to **all** conflicted paths and completes the merge commit (resolving only the first file used to leave the repo stuck).
 - Save-divergence still requires an explicit Local/Remote choice before launch (never silent overwrite).
+- Conflict dialog is Steam-style: This PC vs Cloud cards with last-modified time, size, and a Newer badge; one choice applies to every conflicted file.
 - Shortcut targets resolve via `Environment.ProcessPath` (installed or published GameSync.exe).

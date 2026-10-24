@@ -8,6 +8,7 @@ All notable changes to GameSync are documented here. Version numbers follow [Sem
 - In-app updates now target `TCDev10/GameSync` (legacy `TCDev` / `TCDev69` owners are remapped).
 - Pre-launch sync no longer blocks game launch when GitHub fetch/pull fails; local saves are used instead.
 - Resolving Git conflicts now applies to every conflicted path and completes the merge, ending the launch deadlock loop.
+- Steam-style conflict dialog: local vs cloud cards with last-modified timestamps, sizes, and a Newer badge; choice still applies to all conflicted files.
 
 ## [1.1.2] - 2026-08-20
 

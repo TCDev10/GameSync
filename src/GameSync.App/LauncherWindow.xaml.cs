@@ -62,7 +62,7 @@ public sealed partial class LauncherWindow : Window
         {
             XamlRoot = Content.XamlRoot
         };
-        dialog.Load(conflict, ViewModel.GameTitle, result.Conflicts.Count);
+        dialog.Load(result.Conflicts, ViewModel.GameTitle);
         await dialog.ShowAsync();
 
         if (dialog.Choice is ConflictResolutionChoice.Cancel)

@@ -168,7 +168,7 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
                     "Local saves differ from repository for {GameId} ({Count} change(s)); refusing automatic overwrite",
                     gameId,
                     divergent.TotalChanges);
-                var divergenceConflicts = BuildSaveDivergenceConflicts(game, divergent);
+                var divergenceConflicts = BuildSaveDivergenceConflicts(game, divergent, repoPath, machine.MachineId);
                 return SyncResult.Failure(
                     SyncStatus.Conflicted,
                     "Local and remote saves differ. Choose whether to keep local saves or replace them with remote saves.",
@@ -521,7 +521,11 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
         return (machine, games, game, repoPath);
     }
 
-    private IReadOnlyList<Conflict> BuildSaveDivergenceConflicts(Game game, SaveChangesDetected changes)
+    private IReadOnlyList<Conflict> BuildSaveDivergenceConflicts(
+        Game game,
+        SaveChangesDetected changes,
+        string repositoryLocalPath,
+        string machineId)
     {
         var allPaths = changes.AddedFiles.Concat(changes.ChangedFiles).Concat(changes.DeletedFiles).Distinct(StringComparer.OrdinalIgnoreCase);
         var conflicts = new List<Conflict>();
@@ -536,23 +540,35 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
                 continue;
             }
 
-            var remotePath = string.IsNullOrWhiteSpace(locationRelative)
+            var remoteRelative = string.IsNullOrWhiteSpace(locationRelative)
                 ? location.RemotePath.Replace('\\', '/')
                 : $"{location.RemotePath.TrimEnd('/', '\\')}/{locationRelative}".Replace('\\', '/');
             var localRoot = _pathResolver.Resolve(location.LocalPath);
             var localPath = string.IsNullOrWhiteSpace(locationRelative)
                 ? localRoot
                 : Path.Combine(localRoot, locationRelative.Replace('/', Path.DirectorySeparatorChar));
+            var remoteAbsolute = _pathResolver.MapRemotePathToRepository(repositoryLocalPath, remoteRelative);
+
+            var localProbe = ConflictSideInfo.Probe(localPath);
+            var remoteProbe = ConflictSideInfo.Probe(remoteAbsolute);
 
             conflicts.Add(new Conflict
             {
-                Path = remotePath,
+                Path = remoteRelative,
                 Type = ConflictType.SaveDivergence,
                 GameId = game.Id,
                 SaveLocationId = location.Id,
                 LocalPath = localPath,
-                RemotePath = remotePath,
-                Message = "Local and remote saves differ."
+                RemotePath = remoteRelative,
+                Message = "Local and remote saves differ.",
+                LocalLastWriteUtc = localProbe.LastWriteUtc,
+                RemoteLastWriteUtc = remoteProbe.LastWriteUtc,
+                LocalSizeBytes = localProbe.SizeBytes,
+                RemoteSizeBytes = remoteProbe.SizeBytes,
+                LocalExists = localProbe.Exists,
+                RemoteExists = remoteProbe.Exists,
+                LocalMachine = machineId,
+                RemoteMachine = "GitHub"
             });
         }
 
@@ -562,17 +578,35 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
         }
 
         var fallback = game.SaveLocations.FirstOrDefault();
+        string? fallbackLocal = fallback is null ? null : _pathResolver.Resolve(fallback.LocalPath);
+        string? fallbackRemoteAbs = null;
+        string? fallbackRemoteRel = fallback?.RemotePath?.Replace('\\', '/');
+        if (fallback is not null && !string.IsNullOrWhiteSpace(fallbackRemoteRel))
+        {
+            fallbackRemoteAbs = _pathResolver.MapRemotePathToRepository(repositoryLocalPath, fallbackRemoteRel);
+        }
+
+        var fbLocal = ConflictSideInfo.Probe(fallbackLocal);
+        var fbRemote = ConflictSideInfo.Probe(fallbackRemoteAbs);
         return
         [
             new Conflict
             {
-                Path = fallback?.RemotePath.Replace('\\', '/') ?? game.Id,
+                Path = fallbackRemoteRel ?? game.Id,
                 Type = ConflictType.SaveDivergence,
                 GameId = game.Id,
                 SaveLocationId = fallback?.Id,
-                LocalPath = fallback is null ? null : _pathResolver.Resolve(fallback.LocalPath),
-                RemotePath = fallback?.RemotePath,
-                Message = "Local and remote saves differ."
+                LocalPath = fallbackLocal,
+                RemotePath = fallbackRemoteRel,
+                Message = "Local and remote saves differ.",
+                LocalLastWriteUtc = fbLocal.LastWriteUtc,
+                RemoteLastWriteUtc = fbRemote.LastWriteUtc,
+                LocalSizeBytes = fbLocal.SizeBytes,
+                RemoteSizeBytes = fbRemote.SizeBytes,
+                LocalExists = fbLocal.Exists,
+                RemoteExists = fbRemote.Exists,
+                LocalMachine = machineId,
+                RemoteMachine = "GitHub"
             }
         ];
     }

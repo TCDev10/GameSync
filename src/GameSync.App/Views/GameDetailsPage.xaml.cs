@@ -45,7 +45,7 @@ public sealed partial class GameDetailsPage : Page
         var conflict = result.Conflicts[0];
         var dialog = new ConflictDialog();
         dialog.XamlRoot = XamlRoot;
-        dialog.Load(conflict, ViewModel.Title, result.Conflicts.Count);
+        dialog.Load(result.Conflicts, ViewModel.Title);
         await dialog.ShowAsync();
 
         if (dialog.Choice is ConflictResolutionChoice.ViewHistory)
