@@ -87,7 +87,17 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
                     conflicts: preexistingConflicts);
             }
 
-            await _gitService.FetchAsync(repoPath, cancellationToken).ConfigureAwait(false);
+            var remoteReachable = true;
+            try
+            {
+                await _gitService.FetchAsync(repoPath, cancellationToken).ConfigureAwait(false);
+            }
+            catch (GitPullFailedException ex)
+            {
+                // Network / auth failures must not block launching with local saves.
+                remoteReachable = false;
+                _logger.LogWarning(ex, "Fetch failed before launch for {GameId}; continuing with local saves", gameId);
+            }
 
             var status = await _gitService.GetStatusAsync(repoPath, cancellationToken).ConfigureAwait(false);
             if (status.HasUncommittedChanges)
@@ -99,19 +109,27 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
                 await _backupService.CreateBackupAsync(gameId, protectPaths, cancellationToken).ConfigureAwait(false);
             }
 
-            try
+            if (remoteReachable)
             {
-                await _gitService.PullAsync(repoPath, cancellationToken).ConfigureAwait(false);
-            }
-            catch (GitConflictDetectedException ex)
-            {
-                _logger.LogError("Git conflicts detected during pre-launch sync for {GameId}", gameId);
-                return SyncResult.Failure(
-                    SyncStatus.Conflicted,
-                    "Git conflicts detected. Resolve them before launching.",
-                    gameId,
-                    ex,
-                    ex.Conflicts);
+                try
+                {
+                    await _gitService.PullAsync(repoPath, cancellationToken).ConfigureAwait(false);
+                }
+                catch (GitConflictDetectedException ex)
+                {
+                    _logger.LogError("Git conflicts detected during pre-launch sync for {GameId}", gameId);
+                    return SyncResult.Failure(
+                        SyncStatus.Conflicted,
+                        "Git conflicts detected. Resolve them before launching.",
+                        gameId,
+                        ex,
+                        ex.Conflicts);
+                }
+                catch (GitPullFailedException ex)
+                {
+                    remoteReachable = false;
+                    _logger.LogWarning(ex, "Pull failed before launch for {GameId}; continuing with local saves", gameId);
+                }
             }
 
             var conflicts = await _gitService.GetConflictsAsync(repoPath, cancellationToken).ConfigureAwait(false);
@@ -122,6 +140,17 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
                     "Git conflicts detected. Resolve them before launching.",
                     gameId,
                     conflicts: conflicts);
+            }
+
+            if (!remoteReachable)
+            {
+                _logger.LogInformation(
+                    "Launching {GameId} with local saves because the remote repository was unreachable",
+                    gameId);
+                return SyncResult.Success(
+                    SyncStatus.LocalChanges,
+                    "Could not reach GitHub. Launching with local saves; sync will retry after you exit.",
+                    gameId);
             }
 
             // Do not silently overwrite divergent local saves with remote copies.
@@ -139,7 +168,7 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
                     "Local saves differ from repository for {GameId} ({Count} change(s)); refusing automatic overwrite",
                     gameId,
                     divergent.TotalChanges);
-                var divergenceConflicts = BuildSaveDivergenceConflicts(game, divergent);
+                var divergenceConflicts = BuildSaveDivergenceConflicts(game, divergent, repoPath, machine.MachineId);
                 return SyncResult.Failure(
                     SyncStatus.Conflicted,
                     "Local and remote saves differ. Choose whether to keep local saves or replace them with remote saves.",
@@ -307,8 +336,36 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
         try
         {
             var (machine, _, game, repoPath) = await LoadContextAsync(gameId, cancellationToken).ConfigureAwait(false);
-            await _gitService.FetchAsync(repoPath, cancellationToken).ConfigureAwait(false);
-            await _gitService.PullAsync(repoPath, cancellationToken).ConfigureAwait(false);
+
+            var preexisting = await _gitService.GetConflictsAsync(repoPath, cancellationToken).ConfigureAwait(false);
+            if (preexisting.Count > 0)
+            {
+                return SyncResult.Failure(
+                    SyncStatus.Conflicted,
+                    "Repository still has unresolved Git conflicts. Resolve every conflicted file, then try again.",
+                    gameId,
+                    conflicts: preexisting);
+            }
+
+            try
+            {
+                await _gitService.FetchAsync(repoPath, cancellationToken).ConfigureAwait(false);
+                await _gitService.PullAsync(repoPath, cancellationToken).ConfigureAwait(false);
+            }
+            catch (GitPullFailedException ex)
+            {
+                // Divergence can still be resolved locally without a reachable remote.
+                _logger.LogWarning(ex, "Fetch/pull failed while resolving divergence for {GameId}; continuing offline", gameId);
+            }
+            catch (GitConflictDetectedException ex)
+            {
+                return SyncResult.Failure(
+                    SyncStatus.Conflicted,
+                    "Git conflicts detected while resolving local/remote divergence.",
+                    gameId,
+                    ex,
+                    ex.Conflicts);
+            }
 
             if (resolution == ConflictResolution.Remote)
             {
@@ -464,7 +521,11 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
         return (machine, games, game, repoPath);
     }
 
-    private IReadOnlyList<Conflict> BuildSaveDivergenceConflicts(Game game, SaveChangesDetected changes)
+    private IReadOnlyList<Conflict> BuildSaveDivergenceConflicts(
+        Game game,
+        SaveChangesDetected changes,
+        string repositoryLocalPath,
+        string machineId)
     {
         var allPaths = changes.AddedFiles.Concat(changes.ChangedFiles).Concat(changes.DeletedFiles).Distinct(StringComparer.OrdinalIgnoreCase);
         var conflicts = new List<Conflict>();
@@ -479,23 +540,35 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
                 continue;
             }
 
-            var remotePath = string.IsNullOrWhiteSpace(locationRelative)
+            var remoteRelative = string.IsNullOrWhiteSpace(locationRelative)
                 ? location.RemotePath.Replace('\\', '/')
                 : $"{location.RemotePath.TrimEnd('/', '\\')}/{locationRelative}".Replace('\\', '/');
             var localRoot = _pathResolver.Resolve(location.LocalPath);
             var localPath = string.IsNullOrWhiteSpace(locationRelative)
                 ? localRoot
                 : Path.Combine(localRoot, locationRelative.Replace('/', Path.DirectorySeparatorChar));
+            var remoteAbsolute = _pathResolver.MapRemotePathToRepository(repositoryLocalPath, remoteRelative);
+
+            var localProbe = ConflictSideInfo.Probe(localPath);
+            var remoteProbe = ConflictSideInfo.Probe(remoteAbsolute);
 
             conflicts.Add(new Conflict
             {
-                Path = remotePath,
+                Path = remoteRelative,
                 Type = ConflictType.SaveDivergence,
                 GameId = game.Id,
                 SaveLocationId = location.Id,
                 LocalPath = localPath,
-                RemotePath = remotePath,
-                Message = "Local and remote saves differ."
+                RemotePath = remoteRelative,
+                Message = "Local and remote saves differ.",
+                LocalLastWriteUtc = localProbe.LastWriteUtc,
+                RemoteLastWriteUtc = remoteProbe.LastWriteUtc,
+                LocalSizeBytes = localProbe.SizeBytes,
+                RemoteSizeBytes = remoteProbe.SizeBytes,
+                LocalExists = localProbe.Exists,
+                RemoteExists = remoteProbe.Exists,
+                LocalMachine = machineId,
+                RemoteMachine = "GitHub"
             });
         }
 
@@ -505,17 +578,35 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
         }
 
         var fallback = game.SaveLocations.FirstOrDefault();
+        string? fallbackLocal = fallback is null ? null : _pathResolver.Resolve(fallback.LocalPath);
+        string? fallbackRemoteAbs = null;
+        string? fallbackRemoteRel = fallback?.RemotePath?.Replace('\\', '/');
+        if (fallback is not null && !string.IsNullOrWhiteSpace(fallbackRemoteRel))
+        {
+            fallbackRemoteAbs = _pathResolver.MapRemotePathToRepository(repositoryLocalPath, fallbackRemoteRel);
+        }
+
+        var fbLocal = ConflictSideInfo.Probe(fallbackLocal);
+        var fbRemote = ConflictSideInfo.Probe(fallbackRemoteAbs);
         return
         [
             new Conflict
             {
-                Path = fallback?.RemotePath.Replace('\\', '/') ?? game.Id,
+                Path = fallbackRemoteRel ?? game.Id,
                 Type = ConflictType.SaveDivergence,
                 GameId = game.Id,
                 SaveLocationId = fallback?.Id,
-                LocalPath = fallback is null ? null : _pathResolver.Resolve(fallback.LocalPath),
-                RemotePath = fallback?.RemotePath,
-                Message = "Local and remote saves differ."
+                LocalPath = fallbackLocal,
+                RemotePath = fallbackRemoteRel,
+                Message = "Local and remote saves differ.",
+                LocalLastWriteUtc = fbLocal.LastWriteUtc,
+                RemoteLastWriteUtc = fbRemote.LastWriteUtc,
+                LocalSizeBytes = fbLocal.SizeBytes,
+                RemoteSizeBytes = fbRemote.SizeBytes,
+                LocalExists = fbLocal.Exists,
+                RemoteExists = fbRemote.Exists,
+                LocalMachine = machineId,
+                RemoteMachine = "GitHub"
             }
         ];
     }

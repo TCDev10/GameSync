@@ -5,6 +5,7 @@ using GameSync.Core.Abstractions.Git;
 using GameSync.Core.Abstractions.Repository;
 using GameSync.Core.Abstractions.Sync;
 using GameSync.Core.Configuration;
+using GameSync.Core.Errors;
 using GameSync.Core.Models;
 using GameSync.Infrastructure.Sync;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -186,6 +187,62 @@ public sealed class SyncServiceTests
 
         result.Succeeded.Should().BeFalse();
         result.Status.Should().Be(SyncStatus.Conflicted);
+        await save.DidNotReceive().RestoreRepositoryToLocalAsync(
+            Arg.Any<Game>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
+
+    [Fact]
+    public async Task SyncBeforeGameLaunch_AllowsLaunchWhenFetchFails()
+    {
+        var game = CreateGame(@"C:\tmp\local");
+        var machine = new MachineConfiguration
+        {
+            MachineId = "DESKTOP",
+            Repository = new RepositoryConfiguration
+            {
+                Owner = "me",
+                Name = "saves",
+                LocalPath = @"C:\tmp\repo"
+            }
+        };
+        var games = new GamesConfiguration { Games = [game] };
+
+        var machineStore = Substitute.For<IMachineConfigurationStore>();
+        machineStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(machine);
+        var gamesStore = Substitute.For<ISharedGamesConfigurationStore>();
+        gamesStore.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(games);
+        var repoService = Substitute.For<IRepositoryService>();
+        repoService.IsLocalRepositoryReadyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+
+        var git = Substitute.For<IGitService>();
+        git.GetConflictsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Conflict>());
+        git.FetchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(Task.FromException(new GitPullFailedException("offline")));
+        git.GetStatusAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new GitRepository
+        {
+            LocalPath = @"C:\tmp\repo",
+            HasUncommittedChanges = false,
+            SyncStatus = SyncStatus.UpToDate
+        });
+
+        var save = Substitute.For<ISaveService>();
+        var sync = new SyncService(
+            machineStore,
+            gamesStore,
+            new ConfigurationValidator(),
+            repoService,
+            git,
+            save,
+            Substitute.For<IBackupService>(),
+            Substitute.For<IPathResolver>(),
+            NullLogger<SyncService>.Instance);
+
+        var result = await sync.SyncBeforeGameLaunchAsync("demo_game");
+
+        result.Succeeded.Should().BeTrue();
+        result.Message.Should().Contain("Could not reach GitHub");
+        await git.DidNotReceive().PullAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         await save.DidNotReceive().RestoreRepositoryToLocalAsync(
             Arg.Any<Game>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }

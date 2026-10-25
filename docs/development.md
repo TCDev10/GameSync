@@ -56,7 +56,7 @@ dotnet run --project src/GameSync.App/GameSync.App.csproj -p:Platform=x64 -- --c
 | `GAMESYNC_UPDATE_ON_STARTUP` | Set to `0` to suppress the background update check on startup |
 | `GAMESYNC_LIVE_UPDATE_TEST` | Set to `1` to run the opt-in live update test ([updates.md](updates.md)) |
 
-Defaults: Client ID + `TCDev69` / `GameSync` in `GameSyncOptions`. Local installer: [Inno Setup 6](https://jrsoftware.org/isinfo.php) + `.\installer\build-release.ps1`.
+Defaults: Client ID + `TCDev10` / `GameSync` in `GameSyncOptions`. Local installer: [Inno Setup 6](https://jrsoftware.org/isinfo.php) + `.\installer\build-release.ps1`.
 
 ## Project conventions
 

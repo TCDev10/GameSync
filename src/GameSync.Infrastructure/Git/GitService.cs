@@ -365,6 +365,25 @@ public sealed class GitService : IGitService
 
     private static List<DomainConflict> ReadConflicts(LibGitRepository repo)
     {
+        DateTimeOffset? oursTime = repo.Head?.Tip?.Author?.When;
+        DateTimeOffset? theirsTime = null;
+        var mergeHeadPath = Path.Combine(repo.Info.Path, "MERGE_HEAD");
+        if (File.Exists(mergeHeadPath))
+        {
+            try
+            {
+                var sha = File.ReadAllText(mergeHeadPath).Trim();
+                if (!string.IsNullOrWhiteSpace(sha))
+                {
+                    theirsTime = repo.Lookup<Commit>(sha)?.Author?.When;
+                }
+            }
+            catch
+            {
+                // Best-effort only for dialog timestamps.
+            }
+        }
+
         var list = new List<DomainConflict>();
         foreach (var conflict in repo.Index.Conflicts)
         {
@@ -383,12 +402,59 @@ public sealed class GitService : IGitService
                 type = ConflictType.AddAdd;
             }
 
+            var absolute = Path.Combine(repo.Info.WorkingDirectory, path.Replace('/', Path.DirectorySeparatorChar));
+            long? localSize = null;
+            DateTimeOffset? localWrite = oursTime;
+            var localExists = File.Exists(absolute);
+            if (localExists)
+            {
+                var info = new FileInfo(absolute);
+                localSize = info.Length;
+                localWrite = info.LastWriteTimeUtc;
+            }
+            else if (conflict.Ours is not null)
+            {
+                localExists = true;
+                try
+                {
+                    localSize = repo.Lookup<Blob>(conflict.Ours.Id)?.Size;
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+
+            long? remoteSize = null;
+            var remoteExists = conflict.Theirs is not null;
+            if (conflict.Theirs is not null)
+            {
+                try
+                {
+                    remoteSize = repo.Lookup<Blob>(conflict.Theirs.Id)?.Size;
+                }
+                catch
+                {
+                    // ignore
+                }
+            }
+
             list.Add(new DomainConflict
             {
                 Path = path,
                 Type = type,
                 IsBinary = true,
-                Message = "Unresolved Git conflict. Binary saves must be resolved manually."
+                Message = "Unresolved Git conflict. Binary saves must be resolved manually.",
+                LocalPath = absolute,
+                RemotePath = path,
+                LocalLastWriteUtc = localWrite,
+                RemoteLastWriteUtc = theirsTime ?? oursTime,
+                LocalSizeBytes = localSize,
+                RemoteSizeBytes = remoteSize,
+                LocalExists = localExists,
+                RemoteExists = remoteExists,
+                LocalMachine = "This PC",
+                RemoteMachine = "Incoming (GitHub)"
             });
         }
 

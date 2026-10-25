@@ -62,7 +62,7 @@ public sealed partial class LauncherWindow : Window
         {
             XamlRoot = Content.XamlRoot
         };
-        dialog.Load(conflict, ViewModel.GameTitle);
+        dialog.Load(result.Conflicts, ViewModel.GameTitle);
         await dialog.ShowAsync();
 
         if (dialog.Choice is ConflictResolutionChoice.Cancel)
@@ -104,8 +104,10 @@ public sealed partial class LauncherWindow : Window
                     return;
                 }
 
-                await resolver.ApplyAsync(repoPath, conflict, resolution);
-                applyResult = SyncResult.Success(SyncStatus.UpToDate);
+                // Apply the choice to every conflicted path and finish the merge commit.
+                // Resolving only Conflicts[0] left the repo stuck and blocked every launch.
+                await resolver.ApplyAllAsync(repoPath, result.Conflicts, resolution);
+                applyResult = SyncResult.Success(SyncStatus.UpToDate, "Conflicts resolved.");
             }
 
             if (!applyResult.Succeeded)
