@@ -4,7 +4,20 @@ All notable changes to GameSync are documented here. Version numbers follow [Sem
 
 ## Unreleased
 
+## [1.2.0] - 2026-10-25
+
+### Added
+
+- Smart merge for save slots/runs: when two PCs have different relative paths under the same game folder, GameSync keeps both automatically (no conflict dialog)
+- Content conflicts (same relative path, different bytes) still use the Steam-style Local vs Cloud dialog; unique slots on either side are preserved after the choice
+
+### Changed
+
+- Pre-launch and post-exit sync classify changes into local-only, remote-only, and both-changed instead of treating the whole save folder as one unit
+- Keep Local / Keep Remote applies only to true same-path conflicts, then unions unique files
+
 ### Fixed
+
 - In-app updates now target `TCDev10/GameSync` (legacy `TCDev` / `TCDev69` owners are remapped).
 - Pre-launch sync no longer blocks game launch when GitHub fetch/pull fails; local saves are used instead.
 - Resolving Git conflicts now applies to every conflicted path and completes the merge, ending the launch deadlock loop.
@@ -133,6 +146,7 @@ All notable changes to GameSync are documented here. Version numbers follow [Sem
 - Local save path policy blocks sensitive system folders
 - HTTPS-only update downloads from GitHub hosts
 
+[1.2.0]: https://github.com/TCDev10/GameSync/releases/tag/v1.2.0
 [1.1.2]: https://github.com/TCDev10/GameSync/releases/tag/v1.1.2
 [1.1.1]: https://github.com/TCDev10/GameSync/releases/tag/v1.1.1
 [1.1.0]: https://github.com/TCDev10/GameSync/releases/tag/v1.1.0
