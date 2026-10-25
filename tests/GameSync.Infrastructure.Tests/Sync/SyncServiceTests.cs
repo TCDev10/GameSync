@@ -189,6 +189,8 @@ public sealed class SyncServiceTests
         result.Status.Should().Be(SyncStatus.Conflicted);
         await save.DidNotReceive().RestoreRepositoryToLocalAsync(
             Arg.Any<Game>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+        await save.DidNotReceive().MergeNonConflictingSavesAsync(
+            Arg.Any<Game>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 
 
@@ -247,6 +249,69 @@ public sealed class SyncServiceTests
             Arg.Any<Game>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
     }
 
+
+    [Fact]
+    public async Task SyncBeforeGameLaunch_AutoUnionsNonOverlappingSlots()
+    {
+        var game = CreateGame(@"C:\tmp\local");
+        var machine = new MachineConfiguration
+        {
+            MachineId = "DESKTOP",
+            Repository = new RepositoryConfiguration
+            {
+                Owner = "me",
+                Name = "saves",
+                LocalPath = @"C:\tmp\repo"
+            }
+        };
+        var games = new GamesConfiguration { Games = [game] };
+
+        var machineStore = Substitute.For<IMachineConfigurationStore>();
+        machineStore.LoadAsync(Arg.Any<CancellationToken>()).Returns(machine);
+        var gamesStore = Substitute.For<ISharedGamesConfigurationStore>();
+        gamesStore.LoadAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(games);
+        var repoService = Substitute.For<IRepositoryService>();
+        repoService.IsLocalRepositoryReadyAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(true);
+
+        var git = Substitute.For<IGitService>();
+        git.GetStatusAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new GitRepository
+        {
+            LocalPath = @"C:\tmp\repo",
+            HasUncommittedChanges = false,
+            SyncStatus = SyncStatus.UpToDate
+        });
+        git.GetConflictsAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Conflict>());
+
+        var save = Substitute.For<ISaveService>();
+        save.DetectChangesAsync(Arg.Any<Game>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
+            .Returns(new SaveChangesDetected
+            {
+                AddedFiles = ["main/slotA.sav"],
+                DeletedFiles = ["main/slotB.sav"]
+            });
+        save.HasRepositorySaveContent(Arg.Any<Game>(), Arg.Any<string>()).Returns(true);
+        save.HasLocalSaveContent(Arg.Any<Game>()).Returns(true);
+
+        var sync = new SyncService(
+            machineStore,
+            gamesStore,
+            new ConfigurationValidator(),
+            repoService,
+            git,
+            save,
+            Substitute.For<IBackupService>(),
+            Substitute.For<IPathResolver>(),
+            NullLogger<SyncService>.Instance);
+
+        var result = await sync.SyncBeforeGameLaunchAsync("demo_game");
+
+        result.Succeeded.Should().BeTrue();
+        result.Message.Should().Contain("Merged unique");
+        await save.Received(1).MergeNonConflictingSavesAsync(game, @"C:\tmp\repo", Arg.Any<CancellationToken>());
+        await save.DidNotReceive().RestoreRepositoryToLocalAsync(
+            Arg.Any<Game>(), Arg.Any<string>(), Arg.Any<bool>(), Arg.Any<CancellationToken>());
+    }
+
     [Fact]
     public async Task SyncAfterGameExit_SkipsWhenNoChanges()
     {
@@ -274,6 +339,12 @@ public sealed class SyncServiceTests
             .Returns(SaveChangesDetected.Empty);
 
         var git = Substitute.For<IGitService>();
+        git.GetStatusAsync(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(new GitRepository
+        {
+            LocalPath = @"C:\tmp\repo",
+            HasUncommittedChanges = false,
+            SyncStatus = SyncStatus.UpToDate
+        });
         var sync = new SyncService(
             machineStore,
             gamesStore,
@@ -288,6 +359,7 @@ public sealed class SyncServiceTests
         var result = await sync.SyncAfterGameExitAsync("demo_game");
         result.Succeeded.Should().BeTrue();
         result.Message.Should().Contain("No save changes");
+        await git.Received(1).FetchAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
         await git.DidNotReceive().PushAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
     }
 

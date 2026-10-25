@@ -4,7 +4,7 @@ GameSync v1.0.0 is a desktop tool for technical users who manage their own priva
 
 ## Sync and conflicts
 
-- **Save-level divergence** — If local saves differ from the remote copy before launch, GameSync refuses to overwrite silently. You must resolve Git index conflicts via the in-app Conflict dialog; there is no dedicated wizard yet for save-folder divergence detected outside Git conflicts.
+- **Save-level divergence** — Different relative paths (separate slots/runs) are merged automatically. The same relative path with different bytes still requires an explicit Local/Remote choice via the Steam-style dialog; unique slots on either side are kept.
 - **Multiple conflicts** — When several files conflict at once, the UI resolves the first conflict only; repeat until clean.
 - **Corrupt clones** — A damaged local Git clone is not automatically repaired. Delete `%LOCALAPPDATA%\GameSync\repos\` and reconnect if sync fails persistently.
 

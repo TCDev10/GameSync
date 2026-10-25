@@ -144,6 +144,155 @@ public sealed class SaveServiceTests
         }
     }
 
+
+    [Fact]
+    public async Task MergeNonConflictingSaves_UnionsDistinctSlots()
+    {
+        var root = CreateRoot();
+        try
+        {
+            var localDir = Path.Combine(root, "local", "saves");
+            Directory.CreateDirectory(localDir);
+            File.WriteAllText(Path.Combine(localDir, "slotA.sav"), "run-a");
+
+            var repo = Path.Combine(root, "repo");
+            var remoteDir = Path.Combine(repo, "saves", "demo_game", "main");
+            Directory.CreateDirectory(remoteDir);
+            File.WriteAllText(Path.Combine(remoteDir, "slotB.sav"), "run-b");
+
+            var service = new SaveService(new PathResolver(), Substitute.For<IBackupService>(), NullLogger<SaveService>.Instance);
+            var game = CreateDirectoryOnlyGame(localDir);
+
+            await service.MergeNonConflictingSavesAsync(game, repo);
+
+            File.ReadAllText(Path.Combine(localDir, "slotA.sav")).Should().Be("run-a");
+            File.ReadAllText(Path.Combine(localDir, "slotB.sav")).Should().Be("run-b");
+            File.ReadAllText(Path.Combine(remoteDir, "slotA.sav")).Should().Be("run-a");
+            File.ReadAllText(Path.Combine(remoteDir, "slotB.sav")).Should().Be("run-b");
+
+            var changes = await service.DetectChangesAsync(game, repo);
+            changes.HasChanges.Should().BeFalse();
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task MergeNonConflictingSaves_DoesNotOverwriteSamePathConflict()
+    {
+        var root = CreateRoot();
+        try
+        {
+            var localDir = Path.Combine(root, "local", "saves");
+            Directory.CreateDirectory(localDir);
+            File.WriteAllText(Path.Combine(localDir, "slot.sav"), "local-v2");
+            File.WriteAllText(Path.Combine(localDir, "onlyLocal.sav"), "L");
+
+            var repo = Path.Combine(root, "repo");
+            var remoteDir = Path.Combine(repo, "saves", "demo_game", "main");
+            Directory.CreateDirectory(remoteDir);
+            File.WriteAllText(Path.Combine(remoteDir, "slot.sav"), "remote-v1");
+            File.WriteAllText(Path.Combine(remoteDir, "onlyRemote.sav"), "R");
+
+            var service = new SaveService(new PathResolver(), Substitute.For<IBackupService>(), NullLogger<SaveService>.Instance);
+            var game = CreateDirectoryOnlyGame(localDir);
+
+            await service.MergeNonConflictingSavesAsync(game, repo);
+
+            File.ReadAllText(Path.Combine(localDir, "slot.sav")).Should().Be("local-v2");
+            File.ReadAllText(Path.Combine(remoteDir, "slot.sav")).Should().Be("remote-v1");
+            File.Exists(Path.Combine(localDir, "onlyRemote.sav")).Should().BeTrue();
+            File.Exists(Path.Combine(remoteDir, "onlyLocal.sav")).Should().BeTrue();
+
+            var changes = await service.DetectChangesAsync(game, repo);
+            changes.ChangedFiles.Should().Contain(x => x.Contains("slot.sav", StringComparison.Ordinal));
+            changes.HasContentConflicts.Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task ResolveContentConflicts_KeepLocal_PreservesUniqueRemoteSlot()
+    {
+        var root = CreateRoot();
+        try
+        {
+            var localDir = Path.Combine(root, "local", "saves");
+            Directory.CreateDirectory(localDir);
+            File.WriteAllText(Path.Combine(localDir, "slot.sav"), "local-v2");
+            File.WriteAllText(Path.Combine(localDir, "onlyLocal.sav"), "L");
+
+            var repo = Path.Combine(root, "repo");
+            var remoteDir = Path.Combine(repo, "saves", "demo_game", "main");
+            Directory.CreateDirectory(remoteDir);
+            File.WriteAllText(Path.Combine(remoteDir, "slot.sav"), "remote-v1");
+            File.WriteAllText(Path.Combine(remoteDir, "onlyRemote.sav"), "R");
+
+            var service = new SaveService(new PathResolver(), Substitute.For<IBackupService>(), NullLogger<SaveService>.Instance);
+            var game = CreateDirectoryOnlyGame(localDir);
+
+            await service.ResolveContentConflictsAsync(game, repo, ConflictResolution.Local);
+
+            File.ReadAllText(Path.Combine(localDir, "slot.sav")).Should().Be("local-v2");
+            File.ReadAllText(Path.Combine(remoteDir, "slot.sav")).Should().Be("local-v2");
+            File.ReadAllText(Path.Combine(localDir, "onlyRemote.sav")).Should().Be("R");
+            File.ReadAllText(Path.Combine(remoteDir, "onlyLocal.sav")).Should().Be("L");
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    [Fact]
+    public async Task DetectChanges_OneSideEmptyDirectory_ReportsLocalOnlyAsAdded()
+    {
+        var root = CreateRoot();
+        try
+        {
+            var localDir = Path.Combine(root, "local", "saves");
+            Directory.CreateDirectory(localDir);
+            File.WriteAllText(Path.Combine(localDir, "slotA.sav"), "a");
+
+            var repo = Path.Combine(root, "repo");
+            Directory.CreateDirectory(Path.Combine(repo, "saves", "demo_game", "main"));
+
+            var service = new SaveService(new PathResolver(), Substitute.For<IBackupService>(), NullLogger<SaveService>.Instance);
+            var game = CreateDirectoryOnlyGame(localDir);
+
+            var changes = await service.DetectChangesAsync(game, repo);
+            changes.AddedFiles.Should().Contain(x => x.Contains("slotA.sav", StringComparison.Ordinal));
+            changes.ChangedFiles.Should().BeEmpty();
+            service.HasRepositorySaveContent(game, repo).Should().BeFalse();
+            service.HasLocalSaveContent(game).Should().BeTrue();
+        }
+        finally
+        {
+            Directory.Delete(root, true);
+        }
+    }
+
+    private static Game CreateDirectoryOnlyGame(string localDir) => new()
+    {
+        Id = "demo_game",
+        Title = "Demo Game",
+        SaveLocations =
+        [
+            new SaveLocation
+            {
+                Id = "main",
+                Type = SaveLocationType.Directory,
+                LocalPath = localDir,
+                RemotePath = "saves/demo_game/main"
+            }
+        ]
+    };
+
     private static Game CreateGame(string localDir, string localFile) => new()
     {
         Id = "demo_game",

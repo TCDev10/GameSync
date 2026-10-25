@@ -154,26 +154,43 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
             }
 
             // Do not silently overwrite divergent local saves with remote copies.
-            // First-time cases:
+            // First-time / divergence cases:
             // - remote empty + local has saves → keep local; upload happens after exit
             // - remote has saves + local empty → restore remote
-            // - both have content and differ → refuse
+            // - both have unique slots/runs (no same-path byte conflicts) → auto-union both
+            // - same relative path with different content → Steam conflict dialog
             var divergent = await _saveService.DetectChangesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
             var remoteHasSaves = _saveService.HasRepositorySaveContent(game, repoPath);
             var localHasSaves = _saveService.HasLocalSaveContent(game);
 
             if (divergent.HasChanges && remoteHasSaves && localHasSaves)
             {
-                _logger.LogWarning(
-                    "Local saves differ from repository for {GameId} ({Count} change(s)); refusing automatic overwrite",
+                if (divergent.HasContentConflicts)
+                {
+                    _logger.LogWarning(
+                        "Local saves conflict with repository for {GameId} ({ConflictCount} content conflict(s), {Total} total change(s))",
+                        gameId,
+                        divergent.ChangedFiles.Count,
+                        divergent.TotalChanges);
+                    var divergenceConflicts = BuildSaveDivergenceConflicts(game, divergent, repoPath, machine.MachineId);
+                    return SyncResult.Failure(
+                        SyncStatus.Conflicted,
+                        "Local and remote saves differ on the same file(s). Choose which version to keep; unique slots on either side are preserved.",
+                        gameId,
+                        conflicts: divergenceConflicts);
+                }
+
+                _logger.LogInformation(
+                    "Auto-union of non-overlapping save slots for {GameId} ({LocalOnly} local-only, {RemoteOnly} remote-only)",
                     gameId,
-                    divergent.TotalChanges);
-                var divergenceConflicts = BuildSaveDivergenceConflicts(game, divergent, repoPath, machine.MachineId);
-                return SyncResult.Failure(
-                    SyncStatus.Conflicted,
-                    "Local and remote saves differ. Choose whether to keep local saves or replace them with remote saves.",
-                    gameId,
-                    conflicts: divergenceConflicts);
+                    divergent.AddedFiles.Count,
+                    divergent.DeletedFiles.Count);
+                await _saveService.MergeNonConflictingSavesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("SyncBeforeGameLaunch completed for {GameId} via smart merge", gameId);
+                return SyncResult.Success(
+                    SyncStatus.UpToDate,
+                    "Merged unique local and remote save slots before launch.",
+                    gameId);
             }
 
             if (!remoteHasSaves)
@@ -214,23 +231,7 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
         {
             var (machine, _, game, repoPath) = await LoadContextAsync(gameId, cancellationToken).ConfigureAwait(false);
 
-            var changes = await _saveService.DetectChangesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
-            if (!changes.HasChanges)
-            {
-                _logger.LogInformation("No save changes detected after exit for {GameId}", gameId);
-                return SyncResult.Success(SyncStatus.UpToDate, "No save changes detected.", gameId);
-            }
-
-            var localPaths = game.SaveLocations
-                .Select(l => _pathResolver.Resolve(l.LocalPath))
-                .Where(p => File.Exists(p) || Directory.Exists(p))
-                .ToArray();
-            if (localPaths.Length > 0)
-            {
-                await _backupService.CreateBackupAsync(gameId, localPaths, cancellationToken).ConfigureAwait(false);
-            }
-
-            // Integrate remote commits before rewriting the working tree / pushing.
+            // Integrate remote first so unique slots from other PCs are visible before we classify changes.
             await _gitService.FetchAsync(repoPath, cancellationToken).ConfigureAwait(false);
             var remoteStatus = await _gitService.GetStatusAsync(repoPath, cancellationToken).ConfigureAwait(false);
             if (remoteStatus.SyncStatus is SyncStatus.BehindRemote or SyncStatus.Diverged or SyncStatus.Conflicted)
@@ -260,7 +261,39 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
                 }
             }
 
-            await _saveService.CopyLocalToRepositoryAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
+            var changes = await _saveService.DetectChangesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
+            if (!changes.HasChanges)
+            {
+                _logger.LogInformation("No save changes detected after exit for {GameId}", gameId);
+                return SyncResult.Success(SyncStatus.UpToDate, "No save changes detected.", gameId);
+            }
+
+            if (changes.HasContentConflicts)
+            {
+                _logger.LogWarning(
+                    "Post-exit content conflicts for {GameId} ({Count} path(s))",
+                    gameId,
+                    changes.ChangedFiles.Count);
+                var divergenceConflicts = BuildSaveDivergenceConflicts(game, changes, repoPath, machine.MachineId);
+                return SyncResult.Failure(
+                    SyncStatus.Conflicted,
+                    "Local and remote saves differ on the same file(s) after gameplay. Choose which version to keep; unique slots on either side are preserved.",
+                    gameId,
+                    conflicts: divergenceConflicts);
+            }
+
+            var localPaths = game.SaveLocations
+                .Select(l => _pathResolver.Resolve(l.LocalPath))
+                .Where(p => File.Exists(p) || Directory.Exists(p))
+                .ToArray();
+            if (localPaths.Length > 0)
+            {
+                await _backupService.CreateBackupAsync(gameId, localPaths, cancellationToken).ConfigureAwait(false);
+            }
+
+            // Union unique slots, then stage — never wipe the other PC's exclusive files.
+            await _saveService.MergeNonConflictingSavesAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
+
 
             var stagedPaths = game.SaveLocations
                 .Select(l => l.RemotePath.Replace('\\', '/'))
@@ -367,17 +400,27 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
                     ex.Conflicts);
             }
 
+                        var localPaths = game.SaveLocations
+                .Select(l => _pathResolver.Resolve(l.LocalPath))
+                .Where(p => File.Exists(p) || Directory.Exists(p))
+                .ToArray();
+            if (localPaths.Length > 0)
+            {
+                await _backupService.CreateBackupAsync(gameId, localPaths, cancellationToken).ConfigureAwait(false);
+            }
+
+            // Apply Keep Local / Keep Remote only to same-path content conflicts; unique slots stay.
+            await _saveService.ResolveContentConflictsAsync(game, repoPath, resolution, cancellationToken)
+                .ConfigureAwait(false);
+
             if (resolution == ConflictResolution.Remote)
             {
-                await _saveService.RestoreRepositoryToLocalAsync(game, repoPath, createBackup: true, cancellationToken)
-                    .ConfigureAwait(false);
                 return SyncResult.Success(
                     SyncStatus.UpToDate,
-                    "Remote saves restored locally.",
+                    "Remote versions kept for conflicting files; unique slots from both sides preserved.",
                     gameId);
             }
 
-            await _saveService.CopyLocalToRepositoryAsync(game, repoPath, cancellationToken).ConfigureAwait(false);
             var stagedPaths = game.SaveLocations
                 .Select(l => l.RemotePath.Replace('\\', '/'))
                 .ToArray();
@@ -388,7 +431,7 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
 
             return SyncResult.Success(
                 SyncStatus.UpToDate,
-                "Local saves published to remote repository.",
+                "Local versions kept for conflicting files and published; unique slots from both sides preserved.",
                 gameId);
         }
         catch (GitConflictDetectedException ex)
@@ -527,7 +570,10 @@ public sealed class SyncService : ISyncService, ISyncWorkflow
         string repositoryLocalPath,
         string machineId)
     {
-        var allPaths = changes.AddedFiles.Concat(changes.ChangedFiles).Concat(changes.DeletedFiles).Distinct(StringComparer.OrdinalIgnoreCase);
+        // Dialog is only for true same-path content conflicts; unique slots are auto-unioned elsewhere.
+        var allPaths = changes.ChangedFiles.Count > 0
+            ? (IEnumerable<string>)changes.ChangedFiles
+            : changes.AddedFiles.Concat(changes.ChangedFiles).Concat(changes.DeletedFiles).Distinct(StringComparer.OrdinalIgnoreCase);
         var conflicts = new List<Conflict>();
         foreach (var relative in allPaths)
         {
